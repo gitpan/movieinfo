@@ -1,0 +1,134 @@
+#!/usr/bin/perl
+use strict;
+# ABSTRACT = 'get some basic movie file info';
+use Getopt::Std::Strict '-h';
+our $VERSION = sprintf "%d.%02d", q$Revision: 1.2 $ =~ /(\d+)/g;
+use LEOCHARRE::Basename ':all';
+use LEOCHARRE::Strings ':all';
+my $fails=0;
+$opt_h and print usage() and exit;
+
+
+sub usage {qq{movieinfo [OPTION].. MOVIEFILE
+get some basic movie file info
+
+	-h	   		help
+
+Try 'man movieinfo' for more info.
+}}
+
+sub main {
+
+   my @FILES = map { abs_file_or_die($_) } @ARGV;
+
+   for my $abs (@FILES){
+
+      my $filename = basename($abs);
+      printf "%s\n%s\n",'='x80,$filename;
+
+      if ( my ($w,$h) = movie_dimensions($abs) ){
+         printf "width: %s\nheight: %s\n", $w, $h;
+      }
+      printf "size: %s\n", movie_size($abs);
+
+   }
+
+   exit $fails;
+}
+caller or main();
+
+
+
+###############################################################################
+# in case i want to export these..they check file existence
+
+sub movie_size {
+   my $abs = abs_file_or_die(shift);
+   my $p = sq($abs);
+
+   (split(/\s/,`ls -lha $p`))[4] 
+}
+
+
+sub movie_dimensions {
+   my $abs = abs_file_or_die(shift);
+
+   my $tmpd = `mktemp -d`;
+   chomp $tmpd;
+   -d $tmpd or die("failed making temp dir $! $?");
+
+   my @args = "mplayer -quiet -vo jpeg:outdir=$tmpd -nosound -frames 1 -ss 00:01 ".
+      sq($abs) . '>/dev/null 2>&1';
+
+   my $tmpf = "$tmpd/00000001.jpg"; 
+
+   if(  sys(@args) ){
+      ### getting dimensions
+      
+      require Image::Magick;
+      my $i = Image::Magick->new;
+      my $err;
+      if ($err = $i->Read($tmpf)){ die($err) }
+
+      my($w,$h) =($i->Get(qw/width height/));     
+      unlink $tmpf;
+      $w and $h or die("cant get w and h");
+      ### $w
+      return ($w,$h);
+   }      
+   ### failed
+   return;
+}
+
+
+
+sub sys;
+sub sysd;
+sub sysx;
+sub sys  { (system(@_) == 0) ? 1 : ( warn("Failed system(@_), $!") and 0 ) }
+sub sysd { (system(@_) == 0) ? 1 :   die("Failed system(@_), $!") }
+sub sysx { (system(@_) == 0) ? 1 : ( warn("Failed system(@_), $!") and exit 1 ) }
+
+
+
+
+
+__END__
+
+=pod
+
+=head1 NAME
+
+movieinfo - get some basic movie file info
+
+=head1 DESCRIPTION
+
+I was having trouble getting basic movie info such as dimensions of screen.
+This is a collection of hacks to do so.
+
+=head1 USAGE
+
+movieinfo [OPTIONS].. MOVIEFILE..
+
+	-h	   		help
+
+=head2 USAGE EXAMPLES
+
+   movieinfo ./movie.avi
+
+=head1 AUTHOR
+
+Leo Charre leocharre at cpan dot org
+
+=head1 LICENSE
+
+This package is free software; you can redistribute it and/or modify it under the same terms as Perl itself, i.e., under the terms of the "Artistic License" or the "GNU General Public License".
+
+=head1 DISCLAIMER
+
+This package is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+See the "GNU General Public License" for more details.
+
+=cut
+
